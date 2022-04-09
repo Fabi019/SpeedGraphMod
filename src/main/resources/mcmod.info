@@ -1,0 +1,16 @@
+[
+{
+  "modid": "speedgraph",
+  "name": "Speed Graph",
+  "description": "Displays a speed-graph at the bottom of your window.",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "https://github.com/Fabi019/SpeedGraphMod",
+  "updateUrl": "",
+  "authorList": ["Fabi019"],
+  "credits": "Fabi019",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]
