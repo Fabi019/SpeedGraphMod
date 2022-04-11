@@ -22,23 +22,29 @@ import org.lwjgl.opengl.GL11;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.util.regex.Pattern;
 
 @Mod(
-    modid = SpeedGraphMod.MODID,
-    name = "Speed Graph",
-    version = "1.3.0",
-    useMetadata = true,
-    clientSideOnly = true,
-    guiFactory = "speedgraph.GuiFactoryImpl"
+        modid = SpeedGraphMod.MODID,
+        name = "Speed Graph",
+        version = "1.4.0",
+        useMetadata = true,
+        clientSideOnly = true,
+        guiFactory = "speedgraph.GuiFactoryImpl"
 )
 public class SpeedGraphMod {
     public static final String MODID = "speedgraph";
+
+    private static final Pattern HEX_COLOR_PATTERN = Pattern.compile("^#[a-fA-F0-9]{6}$");
 
     public static Logger logger;
     public static Configuration config;
     public static File configFile;
 
     private CircularArrayList<Double> speeds;
+    private final float[] lineColor = new float[] {1, 1, 1};
+    private final float[] avgLineColor = new float[] {1, 0, 0};
+    private final float[] maxLineColor = new float[] {1, 0, 0};
 
     private Property showGraph;
     private Property smoothLines;
@@ -53,6 +59,10 @@ public class SpeedGraphMod {
     private Property unit;
     private Property bufferSize;
     private Property graphWidth;
+    private Property graphColorHex;
+    private Property avgColorHex;
+    private Property maxColorHex;
+    private Property lineThickness;
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -62,6 +72,12 @@ public class SpeedGraphMod {
         config = new Configuration(configFile);
         config.load();
 
+        graphColorHex = config.get(Configuration.CATEGORY_GENERAL, "Graph color", "#FFFFFF");
+        avgColorHex = config.get(Configuration.CATEGORY_GENERAL, "Max line color", "#FF0000");
+        maxColorHex = config.get(Configuration.CATEGORY_GENERAL, "Avg line color", "#FF0000");
+
+        lineThickness = config.get(Configuration.CATEGORY_GENERAL, "Line thickness", 1.,
+                "Thickness of the graph line", 1., 5.);
         showGraph = config.get(Configuration.CATEGORY_GENERAL, "Show graph", true,
                 "Disable to hide the mod completely");
         bufferSize = config.get(Configuration.CATEGORY_GENERAL, "Buffer size", 200,
@@ -91,6 +107,13 @@ public class SpeedGraphMod {
 
         bufferSize.setRequiresWorldRestart(true);
 
+        graphColorHex.setValidationPattern(HEX_COLOR_PATTERN);
+        graphColorHex.setRequiresWorldRestart(true);
+        avgColorHex.setValidationPattern(HEX_COLOR_PATTERN);
+        avgColorHex.setRequiresWorldRestart(true);
+        maxColorHex.setValidationPattern(HEX_COLOR_PATTERN);
+        maxColorHex.setRequiresWorldRestart(true);
+
         config.save();
     }
 
@@ -106,6 +129,10 @@ public class SpeedGraphMod {
             return;
 
         speeds = new CircularArrayList<>(bufferSize.getInt());
+
+        updateColor(graphColorHex.getString(), lineColor);
+        updateColor(avgColorHex.getString(), avgLineColor);
+        updateColor(maxColorHex.getString(), maxLineColor);
     }
 
     @SideOnly(Side.CLIENT)
@@ -160,10 +187,10 @@ public class SpeedGraphMod {
         GlStateManager.enableAlpha();
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
-        GlStateManager.color(1, 1, 1, 1);
+        GlStateManager.color(lineColor[0], lineColor[1], lineColor[2], 1);
         if (smoothLines.getBoolean())
             GL11.glEnable(GL11.GL_LINE_SMOOTH);
-        GL11.glLineWidth(1.0f);
+        GL11.glLineWidth((float) lineThickness.getDouble());
         GL11.glBegin(GL11.GL_LINE_STRIP);
         Double prevSpeed = speeds.getOldest();
         double increment = graphWidth.getInt() / (double) speeds.size();
@@ -183,18 +210,19 @@ public class SpeedGraphMod {
         GlStateManager.color(1, 0, 0, 0.3f);
         GL11.glBegin(GL11.GL_LINES);
         if (showMax.getBoolean()) {
+            GlStateManager.color(maxLineColor[0], maxLineColor[1], maxLineColor[2], 1);
             GL11.glVertex2d(posX, posY - maxSpeed * 100);
             GL11.glVertex2d(posX + graphWidth.getInt(), posY - maxSpeed * 100);
         }
         if (showAvg.getBoolean()) {
+            GlStateManager.color(avgLineColor[0], avgLineColor[1], avgLineColor[2], 1);
             GL11.glVertex2d(posX, posY - avgSpeed * 100);
             GL11.glVertex2d(posX + graphWidth.getInt(), posY - avgSpeed * 100);
         }
         GL11.glEnd();
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
         GlStateManager.enableTexture2D();
-
-        GlStateManager.color(1, 1, 1, 1);
+        GlStateManager.resetColor();
 
         if (showCurrent.getBoolean()) {
             double displaySpeed = Math.round(newestSpeed * 1000);
@@ -245,6 +273,17 @@ public class SpeedGraphMod {
             ex.printStackTrace();
         }
         return 1f;
+    }
+
+    private void updateColor(String color, float[] target) {
+        try {
+            int colorInt = Integer.decode(color);
+            target[0] = ((colorInt >> 16) & 0xff) / 255f; // red
+            target[1] = ((colorInt >> 8) & 0xff) / 255f; // green
+            target[2] = (colorInt & 0xff) / 255f; // blue
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid color provided!", e);
+        }
     }
 
 }
