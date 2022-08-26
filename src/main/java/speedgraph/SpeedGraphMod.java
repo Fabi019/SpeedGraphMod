@@ -36,7 +36,7 @@ public class SpeedGraphMod {
     public Logger logger;
     public Config config;
 
-    private CircularArrayList<Double> speeds;
+    private CircularBuffer<Double> speeds;
     private final float[] lineColor = new float[] {1, 1, 1};
     private final float[] avgLineColor = new float[] {1, 0, 0};
     private final float[] maxLineColor = new float[] {1, 0, 0};
@@ -62,7 +62,7 @@ public class SpeedGraphMod {
         if (event.entity != Minecraft.getMinecraft().thePlayer)
             return;
 
-        speeds = new CircularArrayList<>(config.getBufferSize());
+        speeds = new CircularBuffer<>(config.getBufferSize());
 
         updateColor(config.getGraphColorHex(), lineColor);
         updateColor(config.getAvgColorHex(), avgLineColor);
@@ -126,18 +126,14 @@ public class SpeedGraphMod {
             GL11.glEnable(GL11.GL_LINE_SMOOTH);
         GL11.glLineWidth((float) config.getLineThickness());
         GL11.glBegin(GL11.GL_LINE_STRIP);
-        Double prevSpeed = speeds.getOldest();
         double increment = config.getGraphWidth() / (double) speeds.size();
-        for (int entry = 0; entry < speeds.size(); entry++) {
-            Double speed = speeds.get(entry);
-            if (speed == null || prevSpeed == null)
-                continue;
+        int entry = 0;
+        for (Double speed : speeds) {
             if (maxSpeed < speed)
                 maxSpeed = speed;
             avgSpeed += speed;
-            prevSpeed = speed;
             newestSpeed = speed;
-            GL11.glVertex2d(posX + (entry * increment) - getRenderPartialTicks(), posY - (speed * 100));
+            GL11.glVertex2d(posX + (entry++ * increment) - getRenderPartialTicks(), posY - (speed * 100));
         }
         avgSpeed = avgSpeed / speeds.size();
         GL11.glEnd();
