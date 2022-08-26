@@ -20,6 +20,7 @@ import org.lwjgl.opengl.GL11;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.util.Objects;
 
 @Mod(
         modid = SpeedGraphMod.MODID,
@@ -40,6 +41,8 @@ public class SpeedGraphMod {
     private final float[] lineColor = new float[] {1, 1, 1};
     private final float[] avgLineColor = new float[] {1, 0, 0};
     private final float[] maxLineColor = new float[] {1, 0, 0};
+
+    private final int graphListIndex = GL11.glGenLists(2);
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -79,8 +82,9 @@ public class SpeedGraphMod {
         if (player != null) {
             double dX = Math.abs(player.posX - player.prevPosX);
             double dZ = Math.abs(player.posZ - player.prevPosZ);
-            double speed = Math.sqrt(dX * dX + dZ * dZ);
-            speeds.insert(speed);
+            speeds.insert(Math.sqrt(dX * dX + dZ * dZ));
+
+            setupRenderList();
         }
     }
 
@@ -114,75 +118,105 @@ public class SpeedGraphMod {
         posX += config.getOffsetX().getInt();
         posY += config.getOffsetY().getInt();
 
+        GlStateManager.enableAlpha();
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+
+        GlStateManager.pushMatrix();
+
+        GlStateManager.translate((float) posX - getRenderPartialTicks(), (float) posY, 0);
+
+        GlStateManager.color(lineColor[0], lineColor[1], lineColor[2], 1);
+        GL11.glCallList(graphListIndex);
+
+        GlStateManager.translate(getRenderPartialTicks(), 0, 0);
+        GL11.glCallList(graphListIndex+1);
+
+        GlStateManager.popMatrix();
+
+        GlStateManager.resetColor();
+        GlStateManager.enableAlpha();
+        GlStateManager.enableBlend();
+        GlStateManager.enableTexture2D();
+    }
+
+    private void setupRenderList() {
         double avgSpeed = 0;
         double maxSpeed = 0;
         double newestSpeed = 0;
 
-        GlStateManager.enableAlpha();
-        GlStateManager.enableBlend();
-        GlStateManager.disableTexture2D();
-        GlStateManager.color(lineColor[0], lineColor[1], lineColor[2], 1);
-        if (config.getSmoothLines())
-            GL11.glEnable(GL11.GL_LINE_SMOOTH);
-        GL11.glLineWidth((float) config.getLineThickness());
-        GL11.glBegin(GL11.GL_LINE_STRIP);
-        double increment = config.getGraphWidth() / (double) speeds.size();
-        int entry = 0;
-        for (Double speed : speeds) {
-            if (maxSpeed < speed)
-                maxSpeed = speed;
-            avgSpeed += speed;
-            newestSpeed = speed;
-            GL11.glVertex2d(posX + (entry++ * increment) - getRenderPartialTicks(), posY - (speed * 100));
-        }
-        avgSpeed = avgSpeed / speeds.size();
-        GL11.glEnd();
-        GlStateManager.color(1, 0, 0, 0.3f);
-        GL11.glBegin(GL11.GL_LINES);
-        if (config.getShowMax()) {
-            GlStateManager.color(maxLineColor[0], maxLineColor[1], maxLineColor[2], 1);
-            GL11.glVertex2d(posX, posY - maxSpeed * 100);
-            GL11.glVertex2d(posX + config.getGraphWidth(), posY - maxSpeed * 100);
-        }
-        if (config.getShowAvg()) {
-            GlStateManager.color(avgLineColor[0], avgLineColor[1], avgLineColor[2], 1);
-            GL11.glVertex2d(posX, posY - avgSpeed * 100);
-            GL11.glVertex2d(posX + config.getGraphWidth(), posY - avgSpeed * 100);
-        }
-        GL11.glEnd();
-        GL11.glDisable(GL11.GL_LINE_SMOOTH);
-        GlStateManager.enableTexture2D();
-        GlStateManager.resetColor();
+        // Graph
+        GL11.glNewList(graphListIndex, GL11.GL_COMPILE);
+        {
+            if (config.getSmoothLines())
+                GL11.glEnable(GL11.GL_LINE_SMOOTH);
 
-        if (config.getShowCurrent()) {
-            double displaySpeed = Math.round(newestSpeed * 1000);
-            if (config.getUnit().equals("m/s"))
-                displaySpeed /= 50;
-            String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
-            if (config.getShowUnit())
-                text += " " + config.getUnit();
-            int size = Minecraft.getMinecraft().fontRendererObj.getStringWidth(text);
-            Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, posX - size / 2.f + 100, posY + 10, 0xFFFFFFFF);
+            GL11.glLineWidth((float) config.getLineThickness());
+
+            GL11.glBegin(GL11.GL_LINE_STRIP);
+            double increment = config.getGraphWidth() / (double) speeds.size();
+            int index = 0;
+            for (Double speed : speeds) {
+                if (maxSpeed < speed)
+                    maxSpeed = speed;
+                avgSpeed += speed;
+                newestSpeed = speed;
+                GL11.glVertex2d(index++ * increment, -(speed * 100));
+            }
+            GL11.glEnd();
+
+            GL11.glDisable(GL11.GL_LINE_SMOOTH);
         }
+        GL11.glEndList();
 
-        markerText(posX, posY, maxSpeed, config.getShowMax());
-        markerText(posX, posY, avgSpeed, config.getShowAvg());
+        // Marker
+        GL11.glNewList(graphListIndex+1, GL11.GL_COMPILE);
+        {
+            GL11.glBegin(GL11.GL_LINES);
+            if (config.getShowMax()) {
+                GL11.glColor4f(maxLineColor[0], maxLineColor[1], maxLineColor[2], 1);
+                GL11.glVertex2d(0, - maxSpeed * 100);
+                GL11.glVertex2d(config.getGraphWidth(), - maxSpeed * 100);
+            }
+            if (config.getShowAvg()) {
+                avgSpeed = avgSpeed / speeds.size();
+                GL11.glColor4f(avgLineColor[0], avgLineColor[1], avgLineColor[2], 1);
+                GL11.glVertex2d(0, - avgSpeed * 100);
+                GL11.glVertex2d(config.getGraphWidth(), - avgSpeed * 100);
+            }
+            GL11.glEnd();
 
-        GlStateManager.enableTexture2D();
-        GlStateManager.enableAlpha();
-        GlStateManager.enableBlend();
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+
+            if (config.getShowCurrent()) {
+                double displaySpeed = Math.round(newestSpeed * 1000);
+                if (config.getUnit().equals("m/s"))
+                    displaySpeed /= 50;
+                String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
+                if (config.getShowUnit())
+                    text += " " + config.getUnit();
+                int size = Minecraft.getMinecraft().fontRendererObj.getStringWidth(text);
+                Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, -size / 2.f + 100,  10, 0xFFFFFFFF);
+            }
+
+            markerText(maxSpeed, config.getShowMax());
+            markerText(avgSpeed, config.getShowAvg());
+
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+        }
+        GL11.glEndList();
     }
 
-    private void markerText(int posX, int posY, double avgSpeed, boolean show) {
+    private void markerText(double speed, boolean show) {
         if (!show) {
             return;
         }
-        double displaySpeed = Math.round(avgSpeed * 1000);
+        double displaySpeed = Math.round(speed * 1000);
         if (config.getUnit().equals("m/s"))
             displaySpeed /= 50;
         String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
         int width = Minecraft.getMinecraft().fontRendererObj.getStringWidth(text);
-        Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, posX - width - 5, posY - Math.round(avgSpeed * 100) - 3.5f, 0xFFFFFFFF);
+        Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, - width - 5, - Math.round(speed * 100) - 3.5f, 0xFFFFFFFF);
     }
 
     private Timer timer;
@@ -199,8 +233,7 @@ public class SpeedGraphMod {
                     }
                 }
             }
-            assert timer != null;
-            return timer.renderPartialTicks;
+            return Objects.requireNonNull(timer).renderPartialTicks;
         } catch (Exception ex) {
             ex.printStackTrace();
         }
