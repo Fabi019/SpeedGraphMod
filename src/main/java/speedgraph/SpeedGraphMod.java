@@ -174,13 +174,15 @@ public class SpeedGraphMod {
     }
 
     private void markerText(int posX, int posY, double avgSpeed, boolean show) {
-        if (show) {
-            double displaySpeed = Math.round(avgSpeed * 1000);
-            if (config.getUnit().equals("m/s"))
-                displaySpeed /= 50;
-            String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
-            Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, posX - 20, posY - Math.round(avgSpeed * 100) - 3.5f, 0xFFFFFFFF);
+        if (!show) {
+            return;
         }
+        double displaySpeed = Math.round(avgSpeed * 1000);
+        if (config.getUnit().equals("m/s"))
+            displaySpeed /= 50;
+        String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
+        int width = Minecraft.getMinecraft().fontRendererObj.getStringWidth(text);
+        Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, posX - width - 5, posY - Math.round(avgSpeed * 100) - 3.5f, 0xFFFFFFFF);
     }
 
     private Timer timer;
