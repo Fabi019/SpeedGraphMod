@@ -6,8 +6,6 @@ import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.util.Timer;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.common.config.Configuration;
-import net.minecraftforge.common.config.Property;
 import net.minecraftforge.event.entity.EntityJoinWorldEvent;
 import net.minecraftforge.fml.common.Loader;
 import net.minecraftforge.fml.common.Mod;
@@ -22,12 +20,9 @@ import org.lwjgl.opengl.GL11;
 
 import java.io.File;
 import java.lang.reflect.Field;
-import java.util.regex.Pattern;
 
 @Mod(
         modid = SpeedGraphMod.MODID,
-        name = "Speed Graph",
-        version = "1.4.0",
         useMetadata = true,
         clientSideOnly = true,
         guiFactory = "speedgraph.GuiFactoryImpl"
@@ -35,84 +30,23 @@ import java.util.regex.Pattern;
 public class SpeedGraphMod {
     public static final String MODID = "speedgraph";
 
-    private static final Pattern HEX_COLOR_PATTERN = Pattern.compile("^#[a-fA-F0-9]{6}$");
+    @Mod.Instance
+    public static SpeedGraphMod instance;
 
-    public static Logger logger;
-    public static Configuration config;
-    public static File configFile;
+    public Logger logger;
+    public Config config;
 
     private CircularArrayList<Double> speeds;
     private final float[] lineColor = new float[] {1, 1, 1};
     private final float[] avgLineColor = new float[] {1, 0, 0};
     private final float[] maxLineColor = new float[] {1, 0, 0};
 
-    private Property showGraph;
-    private Property smoothLines;
-    private Property showCurrent;
-    private Property showMax;
-    private Property showAvg;
-    private Property showUnit;
-    private Property relativeToX;
-    private Property relativeToY;
-    private Property offsetX;
-    private Property offsetY;
-    private Property unit;
-    private Property bufferSize;
-    private Property graphWidth;
-    private Property graphColorHex;
-    private Property avgColorHex;
-    private Property maxColorHex;
-    private Property lineThickness;
-
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         logger = event.getModLog();
 
-        configFile = new File(Loader.instance().getConfigDir(), "speedgraph.cfg");
-        config = new Configuration(configFile);
-        config.load();
-
-        graphColorHex = config.get(Configuration.CATEGORY_GENERAL, "Graph color", "#FFFFFF");
-        avgColorHex = config.get(Configuration.CATEGORY_GENERAL, "Max line color", "#FF0000");
-        maxColorHex = config.get(Configuration.CATEGORY_GENERAL, "Avg line color", "#FF0000");
-
-        lineThickness = config.get(Configuration.CATEGORY_GENERAL, "Line thickness", 1.,
-                "Thickness of the graph line", 1., 5.);
-        showGraph = config.get(Configuration.CATEGORY_GENERAL, "Show graph", true,
-                "Disable to hide the mod completely");
-        bufferSize = config.get(Configuration.CATEGORY_GENERAL, "Buffer size", 200,
-                "Max speed entries for the graph", 10, 1000);
-        graphWidth = config.get(Configuration.CATEGORY_GENERAL, "Graph width", 200,
-                "Max speed entries for the graph", 100, 1000);
-        smoothLines = config.get(Configuration.CATEGORY_GENERAL, "Smooth lines", true,
-                "Render smooth lines (Performance cost!)");
-        showCurrent = config.get(Configuration.CATEGORY_GENERAL, "Show current", true,
-                "Show the current speed below the graph");
-        showMax = config.get(Configuration.CATEGORY_GENERAL, "Show max", true,
-                "Show the current maximum speed");
-        showAvg = config.get(Configuration.CATEGORY_GENERAL, "Show avg", true,
-                "Shows the average speed");
-        showUnit = config.get(Configuration.CATEGORY_GENERAL, "Show unit", true,
-                "Speed unit besides the current speed");
-        relativeToX = config.get(Configuration.CATEGORY_GENERAL, "Horizontal align", "CENTER",
-                "Alignment for the X-Offset", new String[]{"LEFT", "RIGHT", "CENTER"});
-        offsetX = config.get(Configuration.CATEGORY_GENERAL, "X-Offset", -100,
-                "X-Offset");
-        relativeToY = config.get(Configuration.CATEGORY_GENERAL, "Vertical align", "DOWN",
-                "Alignment for the Y-Offset", new String[]{"UP", "DOWN", "CENTER"});
-        offsetY = config.get(Configuration.CATEGORY_GENERAL, "Y-Offset", -70,
-                "Y-Offset");
-        unit = config.get(Configuration.CATEGORY_GENERAL, "Unit", "u/t",
-                "Unit to display", new String[]{"u/t", "m/s"});
-
-        bufferSize.setRequiresWorldRestart(true);
-
-        graphColorHex.setValidationPattern(HEX_COLOR_PATTERN);
-        graphColorHex.setRequiresWorldRestart(true);
-        avgColorHex.setValidationPattern(HEX_COLOR_PATTERN);
-        avgColorHex.setRequiresWorldRestart(true);
-        maxColorHex.setValidationPattern(HEX_COLOR_PATTERN);
-        maxColorHex.setRequiresWorldRestart(true);
+        File configFile = new File(Loader.instance().getConfigDir(), "speedgraph.cfg");
+        config = new Config(configFile);
 
         config.save();
     }
@@ -128,17 +62,17 @@ public class SpeedGraphMod {
         if (event.entity != Minecraft.getMinecraft().thePlayer)
             return;
 
-        speeds = new CircularArrayList<>(bufferSize.getInt());
+        speeds = new CircularArrayList<>(config.getBufferSize());
 
-        updateColor(graphColorHex.getString(), lineColor);
-        updateColor(avgColorHex.getString(), avgLineColor);
-        updateColor(maxColorHex.getString(), maxLineColor);
+        updateColor(config.getGraphColorHex(), lineColor);
+        updateColor(config.getAvgColorHex(), avgLineColor);
+        updateColor(config.getMaxColorHex(), maxLineColor);
     }
 
     @SideOnly(Side.CLIENT)
     @SubscribeEvent
     public void onTick(TickEvent event) {
-        if (event.type != TickEvent.Type.CLIENT || !showGraph.getBoolean() || speeds == null)
+        if (event.type != TickEvent.Type.CLIENT || !config.getShowGraph() || speeds == null)
             return;
 
         EntityPlayerSP player = Minecraft.getMinecraft().thePlayer;
@@ -153,13 +87,13 @@ public class SpeedGraphMod {
     @SideOnly(Side.CLIENT)
     @SubscribeEvent
     public void onRenderOverlay(RenderGameOverlayEvent event) {
-        if (event.type != RenderGameOverlayEvent.ElementType.TEXT || !showGraph.getBoolean() || speeds == null)
+        if (event.type != RenderGameOverlayEvent.ElementType.TEXT || !config.getShowGraph() || speeds == null)
             return;
 
         int posX = event.resolution.getScaledWidth() / 2;
         int posY = event.resolution.getScaledHeight() / 2;
 
-        switch (relativeToX.getString()) {
+        switch (config.getRelativeToX()) {
             case "LEFT":
                 posX = 0;
                 break;
@@ -168,7 +102,7 @@ public class SpeedGraphMod {
                 break;
         }
 
-        switch (relativeToY.getString()) {
+        switch (config.getRelativeToY()) {
             case "UP":
                 posY = 0;
                 break;
@@ -177,8 +111,8 @@ public class SpeedGraphMod {
                 break;
         }
 
-        posX += offsetX.getInt();
-        posY += offsetY.getInt();
+        posX += config.getOffsetX().getInt();
+        posY += config.getOffsetY().getInt();
 
         double avgSpeed = 0;
         double maxSpeed = 0;
@@ -188,12 +122,12 @@ public class SpeedGraphMod {
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
         GlStateManager.color(lineColor[0], lineColor[1], lineColor[2], 1);
-        if (smoothLines.getBoolean())
+        if (config.getSmoothLines())
             GL11.glEnable(GL11.GL_LINE_SMOOTH);
-        GL11.glLineWidth((float) lineThickness.getDouble());
+        GL11.glLineWidth((float) config.getLineThickness());
         GL11.glBegin(GL11.GL_LINE_STRIP);
         Double prevSpeed = speeds.getOldest();
-        double increment = graphWidth.getInt() / (double) speeds.size();
+        double increment = config.getGraphWidth() / (double) speeds.size();
         for (int entry = 0; entry < speeds.size(); entry++) {
             Double speed = speeds.get(entry);
             if (speed == null || prevSpeed == null)
@@ -209,44 +143,44 @@ public class SpeedGraphMod {
         GL11.glEnd();
         GlStateManager.color(1, 0, 0, 0.3f);
         GL11.glBegin(GL11.GL_LINES);
-        if (showMax.getBoolean()) {
+        if (config.getShowMax()) {
             GlStateManager.color(maxLineColor[0], maxLineColor[1], maxLineColor[2], 1);
             GL11.glVertex2d(posX, posY - maxSpeed * 100);
-            GL11.glVertex2d(posX + graphWidth.getInt(), posY - maxSpeed * 100);
+            GL11.glVertex2d(posX + config.getGraphWidth(), posY - maxSpeed * 100);
         }
-        if (showAvg.getBoolean()) {
+        if (config.getShowAvg()) {
             GlStateManager.color(avgLineColor[0], avgLineColor[1], avgLineColor[2], 1);
             GL11.glVertex2d(posX, posY - avgSpeed * 100);
-            GL11.glVertex2d(posX + graphWidth.getInt(), posY - avgSpeed * 100);
+            GL11.glVertex2d(posX + config.getGraphWidth(), posY - avgSpeed * 100);
         }
         GL11.glEnd();
         GL11.glDisable(GL11.GL_LINE_SMOOTH);
         GlStateManager.enableTexture2D();
         GlStateManager.resetColor();
 
-        if (showCurrent.getBoolean()) {
+        if (config.getShowCurrent()) {
             double displaySpeed = Math.round(newestSpeed * 1000);
-            if (unit.getString().equals("m/s"))
+            if (config.getUnit().equals("m/s"))
                 displaySpeed /= 50;
             String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
-            if (showUnit.getBoolean())
-                text += " " + unit.getString();
+            if (config.getShowUnit())
+                text += " " + config.getUnit();
             int size = Minecraft.getMinecraft().fontRendererObj.getStringWidth(text);
             Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, posX - size / 2.f + 100, posY + 10, 0xFFFFFFFF);
         }
 
-        markerText(posX, posY, maxSpeed, showMax);
-        markerText(posX, posY, avgSpeed, showAvg);
+        markerText(posX, posY, maxSpeed, config.getShowMax());
+        markerText(posX, posY, avgSpeed, config.getShowAvg());
 
         GlStateManager.enableTexture2D();
         GlStateManager.enableAlpha();
         GlStateManager.enableBlend();
     }
 
-    private void markerText(int posX, int posY, double avgSpeed, Property prop) {
-        if (prop.getBoolean()) {
+    private void markerText(int posX, int posY, double avgSpeed, boolean show) {
+        if (show) {
             double displaySpeed = Math.round(avgSpeed * 1000);
-            if (unit.getString().equals("m/s"))
+            if (config.getUnit().equals("m/s"))
                 displaySpeed /= 50;
             String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
             Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, posX - 20, posY - Math.round(avgSpeed * 100) - 3.5f, 0xFFFFFFFF);
@@ -286,4 +220,7 @@ public class SpeedGraphMod {
         }
     }
 
+    public static SpeedGraphMod getInstance() {
+        return instance;
+    }
 }

@@ -9,16 +9,16 @@ public class GuiConfigImpl extends GuiConfig {
 
     public GuiConfigImpl(GuiScreen parentScreen) {
         super(parentScreen,
-                new ConfigElement(SpeedGraphMod.config.getCategory(Configuration.CATEGORY_GENERAL)).getChildElements(),
+                new ConfigElement(SpeedGraphMod.getInstance().config.getConfig().getCategory(Configuration.CATEGORY_GENERAL)).getChildElements(),
                 SpeedGraphMod.MODID,
                 false,
                 false,
                 "SpeedGraph Configuration");
-        titleLine2 = SpeedGraphMod.configFile.getName();
+        titleLine2 = SpeedGraphMod.getInstance().config.getConfig().getConfigFile().getName();
     }
 
     @Override
     public void onGuiClosed() {
-        SpeedGraphMod.config.save();
+        SpeedGraphMod.getInstance().config.save();
     }
 }
