@@ -2,7 +2,7 @@ package speedgraph;
 
 import java.util.Iterator;
 
-public class CircularBuffer<E extends Number> implements Iterable<E> {
+public class CircularBuffer<E> implements Iterable<E> {
 
     private final int size;
 

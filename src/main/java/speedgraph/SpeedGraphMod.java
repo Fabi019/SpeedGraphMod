@@ -42,6 +42,10 @@ public class SpeedGraphMod {
     private final float[] avgLineColor = new float[] {1, 0, 0};
     private final float[] maxLineColor = new float[] {1, 0, 0};
 
+    private double avgSpeed = 0;
+    private double maxSpeed = 0;
+    private double newestSpeed = 0;
+
     private final int graphListIndex = GL11.glGenLists(2);
 
     @Mod.EventHandler
@@ -118,40 +122,43 @@ public class SpeedGraphMod {
         posX += config.getOffsetX().getInt();
         posY += config.getOffsetY().getInt();
 
-        GlStateManager.enableAlpha();
-        GlStateManager.enableBlend();
-        GlStateManager.disableTexture2D();
-
         GlStateManager.pushMatrix();
 
         GlStateManager.translate((float) posX - getRenderPartialTicks(), (float) posY, 0);
 
-        GlStateManager.color(lineColor[0], lineColor[1], lineColor[2], 1);
         GL11.glCallList(graphListIndex);
 
         GlStateManager.translate(getRenderPartialTicks(), 0, 0);
+
         GL11.glCallList(graphListIndex+1);
 
-        GlStateManager.popMatrix();
+        if (config.getShowCurrent()) {
+            double displaySpeed = Math.round(newestSpeed * 1000);
+            if (config.getUnit().equals("m/s"))
+                displaySpeed /= 50;
+            String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
+            if (config.getShowUnit())
+                text += " " + config.getUnit();
+            int size = Minecraft.getMinecraft().fontRendererObj.getStringWidth(text);
+            Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, -size / 2.f + 100,  10, 0xFFFFFFFF);
+        }
 
-        GlStateManager.resetColor();
-        GlStateManager.enableAlpha();
-        GlStateManager.enableBlend();
-        GlStateManager.enableTexture2D();
+        markerText(maxSpeed, config.getShowMax());
+        markerText(avgSpeed, config.getShowAvg());
+
+        GlStateManager.popMatrix();
     }
 
     private void setupRenderList() {
-        double avgSpeed = 0;
-        double maxSpeed = 0;
-        double newestSpeed = 0;
-
         // Graph
         GL11.glNewList(graphListIndex, GL11.GL_COMPILE);
         {
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
             if (config.getSmoothLines())
                 GL11.glEnable(GL11.GL_LINE_SMOOTH);
 
             GL11.glLineWidth((float) config.getLineThickness());
+            GL11.glColor3f(lineColor[0], lineColor[1], lineColor[2]);
 
             GL11.glBegin(GL11.GL_LINE_STRIP);
             double increment = config.getGraphWidth() / (double) speeds.size();
@@ -166,43 +173,30 @@ public class SpeedGraphMod {
             GL11.glEnd();
 
             GL11.glDisable(GL11.GL_LINE_SMOOTH);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
         }
         GL11.glEndList();
 
         // Marker
         GL11.glNewList(graphListIndex+1, GL11.GL_COMPILE);
         {
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+
             GL11.glBegin(GL11.GL_LINES);
             if (config.getShowMax()) {
-                GL11.glColor4f(maxLineColor[0], maxLineColor[1], maxLineColor[2], 1);
+                GL11.glColor3f(maxLineColor[0], maxLineColor[1], maxLineColor[2]);
                 GL11.glVertex2d(0, - maxSpeed * 100);
                 GL11.glVertex2d(config.getGraphWidth(), - maxSpeed * 100);
             }
             if (config.getShowAvg()) {
                 avgSpeed = avgSpeed / speeds.size();
-                GL11.glColor4f(avgLineColor[0], avgLineColor[1], avgLineColor[2], 1);
+                GL11.glColor3f(avgLineColor[0], avgLineColor[1], avgLineColor[2]);
                 GL11.glVertex2d(0, - avgSpeed * 100);
                 GL11.glVertex2d(config.getGraphWidth(), - avgSpeed * 100);
             }
             GL11.glEnd();
 
             GL11.glEnable(GL11.GL_TEXTURE_2D);
-
-            if (config.getShowCurrent()) {
-                double displaySpeed = Math.round(newestSpeed * 1000);
-                if (config.getUnit().equals("m/s"))
-                    displaySpeed /= 50;
-                String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
-                if (config.getShowUnit())
-                    text += " " + config.getUnit();
-                int size = Minecraft.getMinecraft().fontRendererObj.getStringWidth(text);
-                Minecraft.getMinecraft().fontRendererObj.drawStringWithShadow(text, -size / 2.f + 100,  10, 0xFFFFFFFF);
-            }
-
-            markerText(maxSpeed, config.getShowMax());
-            markerText(avgSpeed, config.getShowAvg());
-
-            GL11.glDisable(GL11.GL_TEXTURE_2D);
         }
         GL11.glEndList();
     }
