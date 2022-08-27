@@ -20,6 +20,9 @@ import org.lwjgl.opengl.GL11;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
 import java.util.Objects;
 
 @Mod(
@@ -37,7 +40,7 @@ public class SpeedGraphMod {
     public Logger logger;
     public Config config;
 
-    private CircularBuffer<Double> speeds;
+    private CircularBuffer<Float> speeds;
     private final float[] lineColor = new float[] {1, 1, 1};
     private final float[] avgLineColor = new float[] {1, 0, 0};
     private final float[] maxLineColor = new float[] {1, 0, 0};
@@ -47,6 +50,8 @@ public class SpeedGraphMod {
     private double newestSpeed = 0;
 
     private final int graphListIndex = GL11.glGenLists(2);
+
+    private FloatBuffer vertexBuffer;
 
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
@@ -69,6 +74,10 @@ public class SpeedGraphMod {
         if (event.entity != Minecraft.getMinecraft().thePlayer)
             return;
 
+        ByteBuffer bb = ByteBuffer.allocateDirect(config.getBufferSize() * 2 * 4);
+        bb.order(ByteOrder.nativeOrder());
+        vertexBuffer = bb.asFloatBuffer();
+
         speeds = new CircularBuffer<>(config.getBufferSize());
 
         updateColor(config.getGraphColorHex(), lineColor);
@@ -86,9 +95,10 @@ public class SpeedGraphMod {
         if (player != null) {
             double dX = Math.abs(player.posX - player.prevPosX);
             double dZ = Math.abs(player.posZ - player.prevPosZ);
-            speeds.insert(Math.sqrt(dX * dX + dZ * dZ));
 
-            setupRenderList();
+            speeds.insert((float) Math.sqrt(dX * dX + dZ * dZ));
+
+            updateRenderList();
         }
     }
 
@@ -133,7 +143,7 @@ public class SpeedGraphMod {
         GL11.glCallList(graphListIndex+1);
 
         if (config.getShowCurrent()) {
-            double displaySpeed = Math.round(newestSpeed * 1000);
+            float displaySpeed = Math.round(newestSpeed * 1000);
             if (config.getUnit().equals("m/s"))
                 displaySpeed /= 50;
             String text = ("" + displaySpeed).replaceAll("\\.0+$", "");
@@ -149,7 +159,9 @@ public class SpeedGraphMod {
         GlStateManager.popMatrix();
     }
 
-    private void setupRenderList() {
+    private void updateRenderList() {
+        calculateGraphVertices();
+
         // Graph
         GL11.glNewList(graphListIndex, GL11.GL_COMPILE);
         {
@@ -160,17 +172,10 @@ public class SpeedGraphMod {
             GL11.glLineWidth((float) config.getLineThickness());
             GL11.glColor3f(lineColor[0], lineColor[1], lineColor[2]);
 
-            GL11.glBegin(GL11.GL_LINE_STRIP);
-            double increment = config.getGraphWidth() / (double) speeds.size();
-            int index = 0;
-            for (Double speed : speeds) {
-                if (maxSpeed < speed)
-                    maxSpeed = speed;
-                avgSpeed += speed;
-                newestSpeed = speed;
-                GL11.glVertex2d(index++ * increment, -(speed * 100));
-            }
-            GL11.glEnd();
+            GL11.glEnableClientState(GL11.GL_VERTEX_ARRAY);
+            GL11.glVertexPointer(2, 0, vertexBuffer);
+            GL11.glDrawArrays(GL11.GL_LINE_STRIP, 0, speeds.size() - 1);
+            GL11.glDisableClientState(GL11.GL_VERTEX_ARRAY);
 
             GL11.glDisable(GL11.GL_LINE_SMOOTH);
             GL11.glEnable(GL11.GL_TEXTURE_2D);
@@ -199,6 +204,22 @@ public class SpeedGraphMod {
             GL11.glEnable(GL11.GL_TEXTURE_2D);
         }
         GL11.glEndList();
+    }
+
+    private void calculateGraphVertices() {
+        avgSpeed = maxSpeed = newestSpeed = 0;
+        vertexBuffer.clear();
+        float increment = config.getGraphWidth() / (float) speeds.size();
+        int index = 0;
+        for (Float speed : speeds) {
+            if (maxSpeed < speed)
+                maxSpeed = speed;
+            avgSpeed += speed;
+            newestSpeed = speed;
+            vertexBuffer.put(index++ * increment);
+            vertexBuffer.put(-(speed * 100));
+        }
+        vertexBuffer.flip();
     }
 
     private void markerText(double speed, boolean show) {
