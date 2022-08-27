@@ -22,11 +22,10 @@ public class CircularBuffer<E> implements Iterable<E> {
         buf[end++] = item;
         if (end >= size) {
             full = true;
+            end = 0;
         }
-        end %= size;
-        if (full) {
-            start++;
-            start %= size;
+        if (full && ++start >= size) {
+            start = 0;
         }
     }
 
