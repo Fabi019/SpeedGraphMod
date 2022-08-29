@@ -29,6 +29,7 @@ public class Config {
     private final Property avgColorHex;
     private final Property maxColorHex;
     private final Property lineThickness;
+    private final Property interpolate;
 
     public Config(File configFile) {
         config = new Configuration(configFile);
@@ -66,6 +67,8 @@ public class Config {
                 "Y-Offset");
         unit = config.get(Configuration.CATEGORY_GENERAL, "Unit", "u/t",
                 "Unit to display", new String[]{"u/t", "m/s"});
+        interpolate = config.get(Configuration.CATEGORY_GENERAL, "Interpolate", true,
+                "Interpolate the graph position for a smoother look (You need to disable any form of HUD caching for this to work)");
 
         bufferSize.setRequiresWorldRestart(true);
 
@@ -154,5 +157,9 @@ public class Config {
 
     public double getLineThickness() {
         return lineThickness.getDouble();
+    }
+
+    public boolean getInterpolation() {
+        return interpolate.getBoolean();
     }
 }

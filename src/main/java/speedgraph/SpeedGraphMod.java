@@ -23,7 +23,6 @@ import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
-import java.util.Objects;
 
 @Mod(
         modid = SpeedGraphMod.MODID,
@@ -45,9 +44,9 @@ public class SpeedGraphMod {
     private final float[] avgLineColor = new float[] {1, 0, 0};
     private final float[] maxLineColor = new float[] {1, 0, 0};
 
-    private double avgSpeed = 0;
-    private double maxSpeed = 0;
-    private double newestSpeed = 0;
+    private float avgSpeed = 0;
+    private float maxSpeed = 0;
+    private float newestSpeed = 0;
 
     private final int graphListIndex = GL11.glGenLists(2);
 
@@ -108,8 +107,8 @@ public class SpeedGraphMod {
         if (event.type != RenderGameOverlayEvent.ElementType.TEXT || !config.getShowGraph() || speeds == null)
             return;
 
-        int posX = event.resolution.getScaledWidth() / 2;
-        int posY = event.resolution.getScaledHeight() / 2;
+        float posX = event.resolution.getScaledWidth() / 2f;
+        float posY = event.resolution.getScaledHeight() / 2f;
 
         switch (config.getRelativeToX()) {
             case "LEFT":
@@ -133,12 +132,18 @@ public class SpeedGraphMod {
         posY += config.getOffsetY().getInt();
 
         GlStateManager.pushMatrix();
+        GlStateManager.translate(posX, posY, 0);
 
-        GlStateManager.translate((float) posX - getRenderPartialTicks(), (float) posY, 0);
-
+        GlStateManager.pushMatrix();
+        if (config.getInterpolation()) {
+            float prev = (config.getGraphWidth() / (float) speeds.size()) * 2;
+            float offset = prev - prev * getRenderPartialTicks();
+            GL11.glTranslatef(offset, 0, 0);
+        }
+        GlStateManager.enableAlpha();
         GL11.glCallList(graphListIndex);
-
-        GlStateManager.translate(getRenderPartialTicks(), 0, 0);
+        GlStateManager.disableAlpha();
+        GlStateManager.popMatrix();
 
         GL11.glCallList(graphListIndex+1);
 
@@ -194,7 +199,6 @@ public class SpeedGraphMod {
                 GL11.glVertex2d(config.getGraphWidth(), - maxSpeed * 100);
             }
             if (config.getShowAvg()) {
-                avgSpeed = avgSpeed / speeds.size();
                 GL11.glColor3f(avgLineColor[0], avgLineColor[1], avgLineColor[2]);
                 GL11.glVertex2d(0, - avgSpeed * 100);
                 GL11.glVertex2d(config.getGraphWidth(), - avgSpeed * 100);
@@ -219,6 +223,7 @@ public class SpeedGraphMod {
             vertexBuffer.put(index++ * increment);
             vertexBuffer.put(-(speed * 100));
         }
+        avgSpeed = avgSpeed / speeds.size();
         vertexBuffer.flip();
     }
 
@@ -236,23 +241,27 @@ public class SpeedGraphMod {
 
     private Timer timer;
 
-    private float getRenderPartialTicks() {
+    {
         Minecraft mc = Minecraft.getMinecraft();
-        try {
-            if (timer == null) {
-                for (Field f : mc.getClass().getDeclaredFields()) {
-                    if (f.getType() == Timer.class) {
-                        f.setAccessible(true);
-                        timer = (Timer) f.get(mc);
-                        break;
-                    }
+        for (Field f : mc.getClass().getDeclaredFields()) {
+            if (f.getType() == Timer.class) {
+                f.setAccessible(true);
+                try {
+                    timer = (Timer) f.get(mc);
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
                 }
+                break;
             }
-            return Objects.requireNonNull(timer).renderPartialTicks;
-        } catch (Exception ex) {
-            ex.printStackTrace();
         }
-        return 1f;
+    }
+
+    private float getRenderPartialTicks() {
+        try {
+            return timer.renderPartialTicks;
+        } catch (NullPointerException e) {
+            return 1;
+        }
     }
 
     private void updateColor(String color, float[] target) {
